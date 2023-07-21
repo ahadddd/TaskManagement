@@ -2,7 +2,7 @@ import { EntityRepository, Repository } from "typeorm";
 import { Task } from "./task.entity";
 import { CreateTaskDTO } from "./DTO/create-task.dto";
 import { TaskStatus } from "./task-status.enum";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { UpdateTaskDTO } from "./DTO/update-task.dto";
 import { GetTasksFilterDTO } from "./DTO/get-tasks-filter.dto";
@@ -17,19 +17,20 @@ export class TasksRepository {
         private taskRepository: Repository<Task>,
     ) { }
 
-    async getTasks(filterDto: GetTasksFilterDTO): Promise<Task[]> {
+    async getTasks(filterDto: GetTasksFilterDTO, user: User): Promise<Task[]> {
         const query = this.taskRepository.createQueryBuilder('task');
 
-        const {status, search} = filterDto;
+        const { status, search } = filterDto;
 
-        if(status) {
-            query.andWhere('task.status = :status', {status})
+        query.where({ user });
+        if (status) {
+            query.andWhere('task.status = :status', { status })
         }
 
-        if(search) {
+        if (search) {
             query.andWhere(
-                'LOWER(task.title) LIKE LOWER(:search) OR LOWER(task.description) LIKE LOWER(:search)',
-                {search: `%${search}%`}
+                '(LOWER(task.title) LIKE LOWER(:search) OR LOWER(task.description) LIKE LOWER(:search))',
+                { search: `%${search}%` }
             );
         }
 
@@ -37,11 +38,14 @@ export class TasksRepository {
         return tasks;
     }
 
-    async findTaskById(id: string): Promise<Task> {
-        const found = await this.taskRepository.findOne(id);
-        if(!found) {
-            throw new NotFoundException(`Task with id ${id} not found.`);
+    async findTaskById(id: string, user: User): Promise<Task> {
+        const found = await this.taskRepository.findOne({ where: { id, user } })
+        if (!found) {
+            throw new NotFoundException(`Task for ID ${id} does not exist`);
         }
+
+        console.log('passed the id, user check');
+
         return found;
     }
 
@@ -57,15 +61,15 @@ export class TasksRepository {
         return task;
     }
 
-    async deleteTask(id: string): Promise<void> {
-        const result = await this.taskRepository.delete(id);
-        if(result.affected === 0) {
+    async deleteTask(id: string, user: User): Promise<void> {
+        const result = await this.taskRepository.delete({ id, user });
+        if (result.affected === 0) {
             throw new NotFoundException(`Task with id ${id} not found.`)
         }
     }
 
-    async updateTask(id: string, status: UpdateTaskDTO): Promise<Task> {
-        const task = await this.findTaskById(id);
+    async updateTask(id: string, status: UpdateTaskDTO, user: User): Promise<Task> {
+        const task = await this.findTaskById(id, user);
         task.status = status.status;
         await this.taskRepository.save(task);
         return task;
