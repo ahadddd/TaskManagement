@@ -35,6 +35,7 @@ export class TasksController {
 
     @Delete('/:id')
     deleteTask(@Param('id') id: string, @GetUser() user: User): Promise<void> {
+        this.logger.log('Hello, World!');
         return this.tasksService.deleteTask(id, user);
     }
 
